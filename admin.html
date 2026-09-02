@@ -80,13 +80,17 @@
 
     .field { margin-bottom: 14px; }
     .field label { display: block; font-size: 0.85rem; font-weight: 500; color: var(--muted); margin-bottom: 6px; }
-    .field input {
+    .field input, .field textarea {
       width: 100%; padding: 11px 14px;
       border: 1.5px solid #E8D0D8; border-radius: 10px;
       font-family: inherit; font-size: 0.95rem; color: var(--ink);
       outline: none; transition: border-color 0.2s;
     }
-    .field input:focus { border-color: var(--rose); }
+    .field input:focus, .field textarea:focus { border-color: var(--rose); }
+    .field textarea {
+      resize: vertical; min-height: 76px; line-height: 1.45;
+      white-space: pre-wrap; word-break: break-all;
+    }
 
     .btn {
       padding: 12px 28px; border: none; border-radius: 10px;
@@ -129,12 +133,16 @@
     /* Inline edit form inside li */
     .edit-form { margin-top: 12px; display: none; }
     .edit-form.open { display: flex; flex-direction: column; gap: 8px; }
-    .edit-form input {
+    .edit-form input, .edit-form textarea {
       padding: 9px 12px; border: 1.5px solid #E8D0D8; border-radius: 8px;
       font-family: inherit; font-size: 0.9rem; color: var(--ink);
-      outline: none; transition: border-color 0.2s;
+      outline: none; transition: border-color 0.2s; width: 100%;
     }
-    .edit-form input:focus { border-color: var(--rose); }
+    .edit-form textarea {
+      resize: vertical; min-height: 64px; line-height: 1.45;
+      white-space: pre-wrap; word-break: break-all;
+    }
+    .edit-form input:focus, .edit-form textarea:focus { border-color: var(--rose); }
     .edit-form-actions { display: flex; gap: 8px; }
 
     /* Toast */
@@ -205,7 +213,9 @@
     </div>
     <div class="field">
       <label>Buy Link (hidden from spin page)</label>
-      <input type="url" id="inp-url" placeholder="https://shop.example.com/outfit"/>
+      <textarea id="inp-url" rows="3" inputmode="url" autocapitalize="off"
+        autocorrect="off" autocomplete="off" spellcheck="false"
+        placeholder="Paste the product link — extra text / line breaks are OK, it gets cleaned up"></textarea>
     </div>
     <button class="btn btn-primary" id="add-btn">Add to Wheel</button>
   </div>
@@ -328,11 +338,28 @@
     renderList();
   }
 
+  // Pull a usable URL out of whatever got pasted — share text, line breaks,
+  // a missing "https://", trailing punctuation. Returns "" if nothing valid.
+  function cleanUrl(raw) {
+    let s = (raw || "").trim();
+    if (!s) return "";
+    const m = s.match(/https?:\/\/[^\s"'<>]+/i);   // a full link anywhere in the text
+    if (m) s = m[0];
+    else   s = s.replace(/\s+/g, "");              // no scheme — just drop whitespace
+    if (!/^https?:\/\//i.test(s)) s = "https://" + s;
+    s = s.replace(/[)\].,;]+$/, "");               // trailing junk a share text appends
+    try {
+      const u = new URL(s);
+      if (!u.hostname.includes(".")) return "";    // reject non-domains like "notalink"
+      return u.href;
+    } catch { return ""; }
+  }
+
   async function addOutfit() {
     const name = document.getElementById("inp-name").value.trim();
-    const url  = document.getElementById("inp-url").value.trim();
-    if (!name || !url) { toast("Fill in both fields."); return; }
-    try { new URL(url); } catch { toast("Enter a valid URL."); return; }
+    const url  = cleanUrl(document.getElementById("inp-url").value);
+    if (!name) { toast("Enter an outfit name."); return; }
+    if (!url)  { toast("Couldn't find a valid link in what you pasted."); return; }
     const btn = document.getElementById("add-btn");
     btn.disabled = true; btn.textContent = "Adding…";
     try {
@@ -355,8 +382,8 @@
   }
 
   async function saveEdit(id, newName, newUrl) {
-    if (!newName || !newUrl) { toast("Fill in both fields."); return; }
-    try { new URL(newUrl); } catch { toast("Enter a valid URL."); return; }
+    newUrl = cleanUrl(newUrl);
+    if (!newName || !newUrl) { toast("Need a name and a valid link."); return; }
     try {
       await withTimeout(updateDoc(doc(db, "outfits", id), { name: newName, url: newUrl }), 12000, "saving edit");
       const o = outfits.find(x => x.id === id);
@@ -388,7 +415,9 @@
         </div>
         <div class="edit-form" id="ef-${o.id}">
           <input type="text" class="ef-name" value="${escHtml(o.name)}" placeholder="Outfit name"/>
-          <input type="url"  class="ef-url"  value="${escHtml(o.url)}"  placeholder="Buy link"/>
+          <textarea class="ef-url" rows="3" inputmode="url" autocapitalize="off"
+            autocorrect="off" autocomplete="off" spellcheck="false"
+            placeholder="Buy link">${escHtml(o.url)}</textarea>
           <div class="edit-form-actions">
             <button class="btn btn-success ef-save" data-id="${o.id}">Save</button>
             <button class="btn btn-danger  ef-cancel" data-id="${o.id}">Cancel</button>
@@ -421,7 +450,6 @@
   }
 
   document.getElementById("add-btn").addEventListener("click", addOutfit);
-  document.getElementById("inp-url").addEventListener("keydown", e => { if(e.key==="Enter") addOutfit(); });
 </script>
 </body>
 </html>
