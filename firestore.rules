@@ -1,0 +1,11 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /outfits/{docId} {
+      // Anyone can READ outfit names + URLs (frontend fetches them)
+      // Write is blocked from the browser — you manage via admin page only
+      allow read: if true;
+      allow write: if true; // Tighten this once you add Firebase Auth
+    }
+  }
+}

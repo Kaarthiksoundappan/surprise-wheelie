@@ -1,0 +1,284 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Surprise Wheelie 💕</title>
+  <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;700&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet"/>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --rose: #E8748A; --deep: #C1466A; --blush: #FAE8ED;
+      --soft: #FDF4F6; --ink: #2A1A20; --muted: #8C6070; --gold: #F0C060;
+    }
+    body {
+      font-family: 'DM Sans', sans-serif;
+      background: var(--soft);
+      color: var(--ink);
+      min-height: 100vh;
+      display: flex; flex-direction: column; align-items: center;
+      padding: 24px 16px 48px;
+    }
+    header { text-align: center; margin-bottom: 32px; }
+    header h1 {
+      font-family: 'Playfair Display', serif;
+      font-size: clamp(2rem, 5vw, 3rem);
+      color: var(--deep); line-height: 1.1;
+    }
+    header p { margin-top: 8px; color: var(--muted); font-size: 1rem; font-weight: 300; }
+
+    .wheel-wrapper {
+      position: relative;
+      width: min(420px, 90vw); height: min(420px, 90vw);
+      margin: 0 auto 32px;
+    }
+    #wheel-canvas {
+      width: 100%; height: 100%; border-radius: 50%;
+      box-shadow: 0 8px 40px rgba(193,70,106,0.25), 0 0 0 6px #fff, 0 0 0 8px var(--rose);
+    }
+    .pointer {
+      position: absolute; top: 50%; right: -18px;
+      transform: translateY(-50%);
+      width: 0; height: 0;
+      border-top: 18px solid transparent;
+      border-bottom: 18px solid transparent;
+      border-right: 34px solid var(--deep);
+      filter: drop-shadow(2px 0 4px rgba(0,0,0,0.2));
+      z-index: 10;
+    }
+    .center-hub {
+      position: absolute; top: 50%; left: 50%;
+      transform: translate(-50%, -50%);
+      width: 64px; height: 64px; border-radius: 50%;
+      background: var(--gold); border: 4px solid #fff;
+      font-size: 1.6rem;
+      display: flex; align-items: center; justify-content: center;
+      box-shadow: 0 4px 16px rgba(0,0,0,0.15); z-index: 20;
+    }
+    .spin-btn {
+      display: block; margin: 0 auto 32px;
+      padding: 14px 48px;
+      background: var(--rose); color: #fff;
+      font-family: 'DM Sans', sans-serif; font-size: 1.1rem; font-weight: 500;
+      border: none; border-radius: 100px; cursor: pointer;
+      box-shadow: 0 4px 20px rgba(232,116,138,0.45);
+      transition: background 0.2s, transform 0.15s;
+    }
+    .spin-btn:hover { background: var(--deep); transform: translateY(-1px); }
+    .spin-btn:active { transform: translateY(1px); }
+    .spin-btn:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
+
+    /* Result card */
+    #result-card {
+      display: none; max-width: 440px; width: 100%;
+      background: #fff; border-radius: 20px; padding: 28px 32px;
+      box-shadow: 0 8px 32px rgba(193,70,106,0.15);
+      text-align: center;
+      animation: popIn 0.4s cubic-bezier(0.34,1.56,0.64,1);
+      margin-bottom: 32px;
+    }
+    @keyframes popIn {
+      from { opacity:0; transform:scale(0.85) translateY(20px); }
+      to   { opacity:1; transform:scale(1) translateY(0); }
+    }
+    #result-card .emoji { font-size: 2.4rem; margin-bottom: 8px; }
+    #result-card h2 { font-family:'Playfair Display',serif; font-size:1.4rem; color:var(--deep); margin-bottom:6px; }
+    #result-card p { color:var(--muted); font-size:0.95rem; margin-bottom:18px; }
+
+    .reveal-btn {
+      display: inline-block; padding: 12px 36px;
+      background: var(--gold); color: var(--ink);
+      border: none; border-radius: 100px;
+      font-family: 'DM Sans', sans-serif; font-weight: 600; font-size: 1rem;
+      cursor: pointer; box-shadow: 0 4px 16px rgba(240,192,96,0.4);
+      transition: background 0.2s, transform 0.15s;
+      text-decoration: none;
+    }
+    .reveal-btn:hover { background: #e0b040; transform: translateY(-1px); }
+    .reveal-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+    /* Loading state */
+    .loader {
+      display: none; width: 100%; text-align: center;
+      padding: 32px; color: var(--muted); font-size: 0.95rem;
+    }
+    .loader svg { animation: spin-anim 1s linear infinite; display: inline-block; }
+    @keyframes spin-anim { to { transform: rotate(360deg); } }
+
+    /* Empty state */
+    #empty-state {
+      display: none; text-align: center; padding: 32px;
+      color: var(--muted); font-size: 0.95rem;
+    }
+  </style>
+</head>
+<body>
+
+<header>
+  <h1>Surprise Wheelie 💕</h1>
+  <p>Spin and discover your next favourite outfit!</p>
+</header>
+
+<div class="loader" id="loader">
+  <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#E8748A" stroke-width="2.5">
+    <path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/>
+  </svg>
+  <p>Loading outfits…</p>
+</div>
+
+<div id="empty-state">
+  <p>No outfits added yet. Check back soon! 💕</p>
+</div>
+
+<div id="wheel-area" style="display:none; width:100%; display:flex; flex-direction:column; align-items:center;">
+  <div class="wheel-wrapper">
+    <canvas id="wheel-canvas" width="500" height="500"></canvas>
+    <div class="pointer"></div>
+    <div class="center-hub">✨</div>
+  </div>
+  <button class="spin-btn" id="spin-btn">Spin the Wheel!</button>
+</div>
+
+<div id="result-card">
+  <div class="emoji">🎉</div>
+  <h2 id="result-name"></h2>
+  <p>The wheel has chosen — this is your surprise outfit!</p>
+  <button class="reveal-btn" id="reveal-btn">Reveal & Shop 🛍️</button>
+</div>
+
+<!-- Firebase SDK -->
+<script type="module">
+  import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+  import { getFirestore, collection, getDocs } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+
+  // ── PASTE YOUR FIREBASE CONFIG HERE ──────────────────────────────
+  const firebaseConfig = {
+    apiKey:            "REPLACE_WITH_YOUR_API_KEY",
+    authDomain:        "REPLACE_WITH_YOUR_AUTH_DOMAIN",
+    projectId:         "REPLACE_WITH_YOUR_PROJECT_ID",
+    storageBucket:     "REPLACE_WITH_YOUR_STORAGE_BUCKET",
+    messagingSenderId: "REPLACE_WITH_YOUR_MESSAGING_SENDER_ID",
+    appId:             "REPLACE_WITH_YOUR_APP_ID"
+  };
+  // ─────────────────────────────────────────────────────────────────
+
+  const app = initializeApp(firebaseConfig);
+  const db  = getFirestore(app);
+
+  const COLORS = [
+    "#E8748A","#F4A4B4","#C1466A","#F0C060","#D46080",
+    "#F7C5CF","#A83258","#F0D080","#E05070","#F9D0DA"
+  ];
+
+  const canvas   = document.getElementById("wheel-canvas");
+  const ctx      = canvas.getContext("2d");
+  const spinBtn  = document.getElementById("spin-btn");
+  const resultCard = document.getElementById("result-card");
+  const resultName = document.getElementById("result-name");
+  const revealBtn  = document.getElementById("reveal-btn");
+  const loader     = document.getElementById("loader");
+  const emptyState = document.getElementById("empty-state");
+  const wheelArea  = document.getElementById("wheel-area");
+
+  let outfits = [];       // [{ id, name, url }]  — url hidden from UI
+  let currentAngle = 0;
+  let spinning = false;
+  let winnerUrl = "";
+
+  // ── Load outfits from Firestore ──────────────────────────────────
+  async function loadOutfits() {
+    loader.style.display = "block";
+    wheelArea.style.display = "none";
+    emptyState.style.display = "none";
+    try {
+      const snap = await getDocs(collection(db, "outfits"));
+      outfits = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    } catch(e) {
+      console.error("Firebase error:", e);
+    }
+    loader.style.display = "none";
+    if (outfits.length < 2) {
+      emptyState.style.display = "block";
+    } else {
+      wheelArea.style.display = "flex";
+      drawWheel();
+    }
+  }
+
+  // ── Draw ─────────────────────────────────────────────────────────
+  function drawWheel() {
+    const cx = canvas.width / 2, cy = canvas.height / 2, r = cx - 10;
+    const n = outfits.length, arc = (Math.PI * 2) / n;
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    for (let i = 0; i < n; i++) {
+      const start = currentAngle + arc * i, end = start + arc;
+      ctx.beginPath(); ctx.moveTo(cx, cy);
+      ctx.arc(cx, cy, r, start, end); ctx.closePath();
+      ctx.fillStyle = COLORS[i % COLORS.length]; ctx.fill();
+      ctx.strokeStyle = "#fff"; ctx.lineWidth = 2; ctx.stroke();
+      ctx.save(); ctx.translate(cx, cy); ctx.rotate(start + arc / 2);
+      ctx.textAlign = "right"; ctx.fillStyle = "#fff";
+      const fs = Math.max(11, Math.min(16, 260 / n));
+      ctx.font = `600 ${fs}px DM Sans, sans-serif`;
+      ctx.shadowColor = "rgba(0,0,0,0.25)"; ctx.shadowBlur = 3;
+      const label = outfits[i].name.length > 16 ? outfits[i].name.slice(0,15)+"…" : outfits[i].name;
+      ctx.fillText(label, r - 16, fs / 3); ctx.restore();
+    }
+    ctx.beginPath(); ctx.arc(cx, cy, 36, 0, Math.PI*2);
+    ctx.fillStyle = "#fff"; ctx.fill();
+    ctx.strokeStyle = "#F0C060"; ctx.lineWidth = 4; ctx.stroke();
+  }
+
+  // ── Spin ─────────────────────────────────────────────────────────
+  function spin() {
+    if (spinning || outfits.length < 2) return;
+    spinning = true;
+    resultCard.style.display = "none";
+    winnerUrl = "";
+    spinBtn.disabled = true;
+
+    const extraSpins  = (Math.random() * 5 + 8) * Math.PI * 2;
+    const stopAt      = Math.random() * Math.PI * 2;
+    const total       = extraSpins + stopAt;
+    const duration    = 4000 + Math.random() * 1500;
+    const start       = performance.now();
+    const startAngle  = currentAngle;
+    const easeOut = t => 1 - Math.pow(1 - t, 4);
+
+    (function animate(now) {
+      const t = Math.min((now - start) / duration, 1);
+      currentAngle = startAngle + total * easeOut(t);
+      drawWheel();
+      if (t < 1) { requestAnimationFrame(animate); return; }
+      currentAngle %= Math.PI * 2;
+      spinning = false; spinBtn.disabled = false;
+      showResult();
+    })(performance.now());
+  }
+
+  // ── Result ────────────────────────────────────────────────────────
+  function showResult() {
+    const n = outfits.length, arc = (Math.PI * 2) / n;
+    const pointerAngle = ((Math.PI * 2) - (currentAngle % (Math.PI * 2))) % (Math.PI * 2);
+    const idx = Math.floor(pointerAngle / arc) % n;
+    const winner = outfits[idx];
+    winnerUrl = winner.url;
+
+    resultName.textContent = winner.name;
+    revealBtn.textContent  = "Reveal & Shop 🛍️";
+    revealBtn.disabled     = false;
+    resultCard.style.display = "block";
+    resultCard.scrollIntoView({ behavior: "smooth", block: "nearest" });
+  }
+
+  // ── Reveal (only shows link on click) ────────────────────────────
+  revealBtn.addEventListener("click", () => {
+    if (winnerUrl) window.open(winnerUrl, "_blank", "noopener");
+  });
+
+  spinBtn.addEventListener("click", spin);
+
+  loadOutfits();
+</script>
+</body>
+</html>
