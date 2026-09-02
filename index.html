@@ -162,6 +162,17 @@
   };
   // ─────────────────────────────────────────────────────────────────
 
+  const CONFIG_OK = !JSON.stringify(firebaseConfig).includes("REPLACE_WITH");
+
+  function withTimeout(promise, ms, label) {
+    return Promise.race([
+      promise,
+      new Promise((_, reject) => setTimeout(
+        () => reject(new Error(`Timed out while ${label}`)), ms
+      ))
+    ]);
+  }
+
   const app = initializeApp(firebaseConfig);
   const db  = getFirestore(app);
 
@@ -190,14 +201,25 @@
     loader.style.display = "block";
     wheelArea.style.display = "none";
     emptyState.style.display = "none";
-    try {
-      const snap = await getDocs(collection(db, "outfits"));
-      outfits = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-    } catch(e) {
-      console.error("Firebase error:", e);
+    let failed = false;
+    if (!CONFIG_OK) {
+      failed = true;
+      console.error("Firebase config not set in index.html — still has REPLACE_WITH_* placeholders.");
+    } else {
+      try {
+        const snap = await withTimeout(getDocs(collection(db, "outfits")), 12000, "loading outfits");
+        outfits = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+      } catch(e) {
+        failed = true;
+        console.error("Firebase error:", e);
+      }
     }
     loader.style.display = "none";
-    if (outfits.length < 2) {
+    if (failed) {
+      emptyState.querySelector("p").textContent = "Couldn't reach the outfit list right now — try again in a bit 💕";
+      emptyState.style.display = "block";
+    } else if (outfits.length < 2) {
+      emptyState.querySelector("p").textContent = "No outfits added yet. Check back soon! 💕";
       emptyState.style.display = "block";
     } else {
       wheelArea.style.display = "flex";

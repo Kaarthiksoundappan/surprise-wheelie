@@ -242,6 +242,23 @@
 
   const CORRECT_PIN = "07092026";
 
+  // Fail loudly if the config was never filled in
+  const CONFIG_OK = !JSON.stringify(firebaseConfig).includes("REPLACE_WITH");
+  if (!CONFIG_OK) {
+    alert("⚠️ Firebase config not set.\n\nEdit admin.html — replace the REPLACE_WITH_YOUR_* values with your real Firebase web config — then re-deploy.");
+  }
+
+  // Reject instead of hanging forever when Firestore can't be reached
+  function withTimeout(promise, ms, label) {
+    return Promise.race([
+      promise,
+      new Promise((_, reject) => setTimeout(
+        () => reject(new Error(`Timed out after ${ms / 1000}s while ${label}. Check the Firebase config and that Firestore is enabled (Native mode).`)),
+        ms
+      ))
+    ]);
+  }
+
   const app = initializeApp(firebaseConfig);
   const db  = getFirestore(app);
 
@@ -304,9 +321,9 @@
     document.getElementById("list-loader").style.display = "block";
     document.getElementById("outfit-list").innerHTML = "";
     try {
-      const snap = await getDocs(collection(db, "outfits"));
+      const snap = await withTimeout(getDocs(collection(db, "outfits")), 12000, "loading outfits");
       outfits = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-    } catch(e) { console.error(e); toast("Firebase error — check config."); }
+    } catch(e) { console.error(e); toast(e.code ? `Firebase error: ${e.code}` : e.message); }
     document.getElementById("list-loader").style.display = "none";
     renderList();
   }
@@ -319,19 +336,19 @@
     const btn = document.getElementById("add-btn");
     btn.disabled = true; btn.textContent = "Adding…";
     try {
-      const ref = await addDoc(collection(db, "outfits"), { name, url });
+      const ref = await withTimeout(addDoc(collection(db, "outfits"), { name, url }), 12000, "adding outfit");
       outfits.push({ id: ref.id, name, url });
       document.getElementById("inp-name").value = "";
       document.getElementById("inp-url").value  = "";
       renderList(); toast("Outfit added! 🎉");
-    } catch(e) { console.error(e); toast("Failed to add. Check Firebase."); }
+    } catch(e) { console.error(e); toast(e.code ? `Failed: ${e.code}` : e.message); }
     btn.disabled = false; btn.textContent = "Add to Wheel";
   }
 
   async function deleteOutfit(id) {
     if (!confirm("Remove this outfit from the wheel?")) return;
     try {
-      await deleteDoc(doc(db, "outfits", id));
+      await withTimeout(deleteDoc(doc(db, "outfits", id)), 12000, "deleting outfit");
       outfits = outfits.filter(o => o.id !== id);
       renderList(); toast("Outfit removed.");
     } catch(e) { console.error(e); toast("Delete failed."); }
@@ -341,7 +358,7 @@
     if (!newName || !newUrl) { toast("Fill in both fields."); return; }
     try { new URL(newUrl); } catch { toast("Enter a valid URL."); return; }
     try {
-      await updateDoc(doc(db, "outfits", id), { name: newName, url: newUrl });
+      await withTimeout(updateDoc(doc(db, "outfits", id), { name: newName, url: newUrl }), 12000, "saving edit");
       const o = outfits.find(x => x.id === id);
       if (o) { o.name = newName; o.url = newUrl; }
       renderList(); toast("Outfit updated ✓");
